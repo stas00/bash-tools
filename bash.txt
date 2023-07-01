@@ -1,0 +1,393 @@
+# -*- mode: sh;-*-
+############
+### Bash ###
+############
+
+# bash strict mode
+# best to start all bash scripts with:
+#
+#!/bin/bash
+set -euo pipefail
+#
+# set -e instructs bash to immediately exit if any command [1] has a non-zero exit status.
+# set -u instructs bash to immediately exit if any undefined variable is used (exceptions: $* and $@)
+# set -o pipefail - if any command in a pipeline fails, that return code will be used as the return
+# code of the whole pipeline and not the status of the last command.
+
+# print return code of the last run program
+echo $?
+
+# variable checks
+if checks: http://tldp.org/LDP/Bash-Beginners-Guide/html/sect_07_01.html
+[ -z STRING ]	# True of the length if "STRING" is zero.
+test -z "$var"  # same
+[ -n STRING ]   # True if the length of "STRING" is non-zero.
+test -n "$var"  # same
+[ STRING ]	    # True if the length of "STRING" is non-zero.
+[ $? -eq 0 ]    # True if exit status was 0 (success)
+ops: - eq, -ne, -lt, -le, -gt or -ge
+
+# check that variable is set and fall back to x if it's not set
+if [ -z ${var+x} ]; then echo "var is unset"; else echo "var is set to '$var'"; fi
+
+
+### escape chars / quoting ###
+
+# escape single quote: use $'' syntax since bash==4.4
+$ echo $'aa\'bb'
+aa'bb
+# in alias
+alias x=$'aa\'bb'
+
+# escape chars
+
+\a     alert (bell)
+\b     backspace
+\e
+\E     an escape character
+\f     form feed
+\n     new line
+\r     carriage return
+\t     horizontal tab
+\v     vertical tab
+\\     backslash
+\'     single quote
+\"     double quote
+\?     question mark
+\nnn   the eight-bit character whose value is the octal value nnn (one to three digits)
+\xHH   the eight-bit character whose value is the hexadecimal value HH (one or two hex digits)
+\uHHHH the Unicode (ISO/IEC 10646) character whose value is the hexadecimal value HHHH (one to four hex digits)
+\UHHHHHHHH the Unicode (ISO/IEC 10646) character whose value is the hexadecimal value HHHHHHHH (one to eight hex digits)
+\cx    a control-x character
+
+
+### redirect outputs to a file from inside bash script (not outside)
+
+# redirect and use tee to continue printing it out
+#!/bin/bash
+exec &> >(tee -a "$log_file")
+echo hello
+
+# redirect and also print to the output
+#!/bin/bash
+exec >> $log_file 2>&1 && tail $log_file
+echo hello
+
+
+
+### prompt ###
+
+
+PS1=""
+# Add conda environment to prompt
+if [ ! -z "$CONDA_DEFAULT_ENV" ]
+then
+    PS1+="($CONDA_DEFAULT_ENV) "
+fi
+PS1+="\u:\w\$ "
+
+
+### Environment variables ###
+
+# set variable only for current shell
+x=foo
+# set it for current shell and all processes started from current shell
+export x=foo
+# set permanently (add to ~/.bashrc for apps starting from shell, ~/.profile for desktop apps started from menu)
+export x=foo
+# set system-wide - edit /etc/environment - don't use export, just:
+x=foo
+# set env var just for the
+x=foo program_that_uses_env_var_x # sees x
+
+# set for one-liners:
+#
+# this doesn't work - # the shell expands the variable in the command line before it actually runs
+# the command and at that time the variable doesn't exist.
+x=foo echo $x
+
+# workarounds:
+x=foo; echo $x
+x=foo && echo $x
+# the problem is that now $x is set for all future commands.
+# to limit the scope of env var to one command run:
+(x=foo; echo $x)
+
+# check value
+echo $x
+
+# unset
+unset x
+
+
+
+### Conditionals ###
+
+# loops/conditions
+# it's always better to use [[ ]] for conditions
+
+
+if [ -d "$DIRECTORY" ]; then
+  # Control will enter here if $DIRECTORY exists.
+fi
+if [ ! -d "$DIRECTORY" ]; then
+    echo "$DIRECTORY doesn't exist"
+    exit 1
+fi
+
+# check if file exists
+FILE=/etc/resolv.conf
+if [[ -f "$FILE" ]]; then
+    echo "$FILE exists."
+fi
+
+
+
+## match string
+
+domain=$(hostname -d)
+if [[ "idris.fr" == $domain ]]; then
+  echo "It's JZ"
+else
+  echo "It's not JZ"
+fi
+
+## is substring in a string
+
+# 1. wildcard equal
+string='My long string'
+if [[ $string == *"My long"* ]]; then
+  echo "It's there!"
+fi
+# 2. case
+case "$string" in
+  *foo*)
+    # Do stuff
+    ;;
+esac
+# 3. using grep
+if grep -q foo <<<"$string"; then
+    echo "It's there"
+fi
+
+# eval command and store its output in a variable
+cmd="date"
+out=$(eval "$cmd") || exit 1
+echo "got: $out"
+
+# math, same works for variables, just use $a+$b
+# add numbers
+echo $((2+3)) # 5
+# multiply numbers
+echo $((2*3)) # 6
+
+# trace execution - the most useful debug feature, add to the top of the script:
+set -x
+
+# automatically feed an interactive prompt
+# if a program expects [Y/n] (change Y to whatever letter/word is needed)
+yes Y | ./script
+
+
+# multiline echo append to a file (heredoc)
+# a.
+echo "line 1" >> log.txt
+echo "line 2" >> log.txt
+# b.
+echo "line 1
+line 2" >> log.txt
+# c.
+cat << EOT >> log.txt
+line 1
+line 2
+EOT
+# replace >> with > to overwrite, rather than append
+# d. (remove -a not to append)
+tee -a log.txt << EOT
+line 1
+line 2
+EOT
+
+
+
+# get a random number between 1-10
+echo $RANDOM % 10 + 1 | bc
+# sleep for a random 1-5 secs
+sleep $(echo $RANDOM % 5 + 1 | bc)
+# another way
+sleep .$[ ( $RANDOM % 5 ) + 1 ]s
+# sleep for a fraction of a second (0.1-0.5)
+sleep .$[ ( $RANDOM % 5 ) + 1 ]s
+
+# descend into the sub-folder before running a command in it
+find . -depth -name "index.html" -execdir pwd \;
+
+# exec something that requires redirection for each find's match - cheat - use bash
+find . -type f -exec bash -c 'ls -l $0 >> /tmp/result' {} \;
+find . -type f -exec bash -c "ls -l $0 | grep something" {} \;
+#
+# a better way to pass the find's match {} as an argument is via
+find . -name '*.ovpn' -exec sh -c 'echo "line to append" >> "$0"' {} \;
+# scripts like to refer to the first argument you use $1, so we add a dummy arg 'dummy'
+find . -name '*.ovpn' -exec sh -c 'echo "line to append" >> "$1"' dummy {} \;
+# dummy is usually replaced with sh, bash, etc.
+find . -name '*.ovpn' -exec sh -c 'echo "line to append" >> "$1"' sh {} \;
+# or can pipe all the files at once using: {} +
+find . -name '*.ovpn' -exec sh -c 'echo "line to append" | tee -a "$@" >/dev/null' sh {} +
+# inside the command executed by sh -c we retrieve them with "$@", which expands
+# to "$1" "$2" "$3", so here the dummy (unused) $0 is a must.
+
+# restart a service at random (between 0 seconds and 12 hours)
+0 */12 * * * root perl -e 'sleep int(rand(43200))' && service puppet restart
+
+
+# check some program is available
+function check_curl_is_available {
+    command -v curl >/dev/null 2>&1 || { echo >&2 "$me requires 'curl' but it's not installed. Aborting."; exit 1; }
+}
+
+### loops ###
+
+# counter in a while loop
+COUNTER=0
+while [[ SOMETHING ]]; do
+    COUNTER=$[$COUNTER +5]
+    echo "waiting: $COUNTER sec"
+    sleep 5
+done
+
+# run a command in a loop and use the counter
+for i in {0..2}; do echo $i; done
+# same with variables
+END=5; for i in $(seq 1 $END); do echo $i; done
+
+# declare an array called array and define 3 values
+array=( one two three )
+for i in "${array[@]}"
+do
+	echo $i
+done
+
+### paths
+
+# get the absolute path of the dir the current bash script is located in
+BASE_DIR_REL=`dirname "$0"`
+BASE_DIR=$(cd "$BASE_DIR_REL" && pwd)
+# or:
+BASE_DIR=$(cd "$(dirname "$0")" && pwd)
+
+###
+
+# find bugs in shell scripts:
+https://www.shellcheck.net/
+
+# get script's name:
+me=$(basename "$0")
+
+# find all .orig files and create the patch file
+mkpatchorig() {
+    local diffopts
+    for f in `find . -name '*.orig' | sed s,^\./,,`
+    do
+	case `echo $f | sed 's,.orig$,,;s,.*\.,,'` in
+	    c)	 diffopts=-p ;;
+	    pod) diffopts='-F^=' ;;
+	    *)	 diffopts= ;;
+	esac
+	diff -du $diffopts $f `echo $f | sed 's,.orig$,,'`
+    done
+}
+
+# combine stdout/stderr
+# to a pipe:
+cmd 2>&1 | less
+# same
+cmd |& less
+# to a file:
+cmd >>file.txt 2>&1
+cmd >/dev/null 2>&1
+
+# emulate tcsh's Esc-p in bash (almost identical, but won't move to the end of the line)
+# add to ~/.inputrc:
+"\ep": history-search-backward
+"\en": history-search-forward
+
+# allow the new line to be pasted with the command and automatically run (as if Enter was pressed)
+# add to ~/.inputrc and start a new bash
+set enable-bracketed-paste Off
+
+# search bash history when partial command has been typed
+CTRL-a # This moves our cursor to the beginning of the line.
+CTRL-r # copy the current command line
+CTRL-y # paste it
+CTRL-r # search the history (repeat this last command)
+# example: start with typing "sudo", and then 4 Ctrl-commands to search through history commands containing the string "sudo"
+sudo CTRL-aryr # type each Ctrl-x command separately
+
+# if file is empty do a otherwise b
+if [[ -s diff.txt ]]; then echo "file has something"; else echo "file is empty"; fi
+
+# reset path hash (rehash in tcsh)
+# verify the command is hashed:
+type python
+# to clear the entire cache:
+hash -r
+# to clear specific entry:
+hash -d python
+
+
+### quoting
+
+# keeping the argument with whitespace in a parameter quoted correctly:
+# passing the arg explicitly and directly works:
+python -c 'import argparse; p=argparse.ArgumentParser();p.add_argument("--list", nargs="*", default=None); print(p.parse_args().list)' --list "a a a" # ['a a a']
+# parametrizing breaks due to expansion
+DATA_ARGS="--list 'a a a'"
+python -c 'import argparse; p=argparse.ArgumentParser();p.add_argument("--list", nargs="*", default=None); print(p.parse_args().list)' $DATA_ARGS # ["'a", 'a', "a'"] - wrong! needs to be a single argument
+
+# 1st solution: using xargs:
+echo $DATA_ARGS | xargs python -c 'import argparse; p=argparse.ArgumentParser();p.add_argument("--list", nargs="*", default=None); print(p.parse_args().list)' # ['a a a']
+
+# 2nd solution: using an array, where quoting doesn't get broken as each entry remembers its full value explicitly
+args=(--list "a a a")
+args+=("b b b"); # optional to add more args
+python -c 'import argparse; p=argparse.ArgumentParser();p.add_argument("--list", nargs="*", default=None); print(p.parse_args().list)' "${args[@]}" # ['a a a']
+
+# some more notes here: http://mywiki.wooledge.org/BashFAQ/050
+
+
+
+### temp files
+
+# automatically create and delete a temp file on bash script's exit (w/ or w/o errors)
+tmpfile=$(mktemp /tmp/tmp.XXXXXXXXXX)
+function finish {
+  rm -rf $tmpfile
+}
+trap finish EXIT
+# now do something with $tmpfile
+# for a temp directory add -`d`
+
+
+### .bash_profile ###
+
+# adding to PATH, etc., avoiding duplicates
+function add_to_PATH {
+    case ":$PATH:" in
+        *":$1:"*) :;; # already there
+        *) PATH="$1:$PATH";; # or PATH="$PATH:$1"
+    esac
+}
+
+function add_to_LD_LIBRARY_PATH {
+    case ":$LD_LIBRARY_PATH:" in
+        *":$1:"*) :;; # already there
+        *) LD_LIBRARY_PATH="$1:$LD_LIBRARY_PATH";; # or LD_LIBRARY_PATH="$LD_LIBRARY_PATH:$1"
+    esac
+}
+
+# set PATH for cuda 10.0 installation
+if [ -d "/usr/local/cuda-10.0/bin/" ]; then
+    add_to_PATH            /usr/local/cuda-10.0/bin
+    add_to_LD_LIBRARY_PATH /usr/local/cuda-10.0/lib64
+fi
