@@ -1,4 +1,6 @@
-# bash tools
+# bash Tools
+
+Helper tools and how-tos for bash:
 
 - [bash cheat-sheet](./bash.txt) - various solutions to bash scripting and command line runs
 
